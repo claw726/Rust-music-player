@@ -1,0 +1,46 @@
+   Compiling rust_music_player v0.1.0 (/home/calaw/rust_music_player)
+warning: unused import: `cpal::FromSample`
+ --> src/audio/player.rs:1:13
+  |
+1 | use rodio::{cpal::FromSample, Decoder, OutputStream, Sink, Source};
+  |             ^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused variable: `sink`
+  --> src/audio/player.rs:65:13
+   |
+65 |         let sink = Arc::clone(&self.sink);
+   |             ^^^^ help: if this is intentional, prefix it with an underscore: `_sink`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: function `format_time` is never used
+  --> src/utils/format.rs:42:4
+   |
+42 | fn format_time(ms: u64) -> String {
+   |    ^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `rust_music_player` (lib) generated 3 warnings (run `cargo fix --lib -p rust_music_player` to apply 1 suggestion)
+warning: unused imports: `ExecutableCommand`, `MoveToColumn`, `RestorePosition`, `SavePosition`, and `style::Print`
+ --> src/main.rs:6:5
+  |
+6 |     ExecutableCommand,
+  |     ^^^^^^^^^^^^^^^^^
+7 |     cursor::{MoveToColumn, SavePosition, RestorePosition},
+  |              ^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+8 |     style::Print,
+  |     ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `decoder::load_sound_file`
+  --> src/main.rs:11:32
+   |
+11 | use rust_music_player::audio::{decoder::load_sound_file, player::AudioPlayer};
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `rust_music_player` (bin "rust_music_player") generated 2 warnings (run `cargo fix --bin "rust_music_player"` to apply 2 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.67s
