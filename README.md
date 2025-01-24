@@ -12,17 +12,53 @@ A command-line audio player built in Rust that supports MP3 and FLAC formats.
 
 ## Dependencies
 
+## Dependencies
+
 ### Linux
 Required system libraries:
+
 ```bash
 # Ubuntu/Debian
-sudo apt-get install libasound2-dev pkg-config
+sudo apt-get install \
+  libasound2-dev \
+  pkg-config \
+  libx11-dev \
+  libxext-dev \
+  libxft-dev \
+  libxinerama-dev \
+  libxcursor-dev \
+  libxrender-dev \
+  libxfixes-dev \
+  libpango1.0-dev \
+  libgl1-mesa-dev \
+  libglu1-mesa-dev
 
 # Fedora
-sudo dnf install alsa-lib-devel
+sudo dnf install \
+  alsa-lib-devel \
+  libX11-devel \
+  libXext-devel \
+  libXft-devel \
+  libXinerama-devel \
+  libXcursor-devel \
+  libXrender-devel \
+  libXfixes-devel \
+  pango-devel \
+  mesa-libGL-devel \
+  mesa-libGLU-devel
 
 # Arch Linux
-sudo pacman -S alsa-lib
+sudo pacman -S \
+  alsa-lib \
+  libx11 \
+  libxext \
+  libxft \
+  libxinerama \
+  libxcursor \
+  libxrender \
+  libxfixes \
+  pango \
+  mesa
 ```
 
 ## Installation
