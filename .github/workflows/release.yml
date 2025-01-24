@@ -25,6 +25,13 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     
+    # Install dependencies based on OS
+    - name: Install Linux dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libasound2-dev pkg-config
+    
     - name: Build
       run: cargo build --release
     
