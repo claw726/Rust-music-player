@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Release for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: audioplayer
+            asset_name: audioplayer-linux-amd64
+          - os: windows-latest
+            artifact_name: audioplayer.exe
+            asset_name: audioplayer-windows-amd64.exe
+          - os: macos-latest
+            artifact_name: audioplayer
+            asset_name: audioplayer-macos-amd64
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Build
+      run: cargo build --release
+    
+    - name: Prepare asset
+      shell: bash
+      run: |
+        cp target/release/${{ matrix.artifact_name }} ${{ matrix.asset_name }}
+    
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ matrix.asset_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
