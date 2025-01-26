@@ -12,6 +12,7 @@ anyhow = "1.0"
 lofty = "0.22"
 opus = "0.3"
 ogg = "0.9"
+lewton = "0.10.2"
 
 [profile.release]
 opt-level = 3            # Maximum optimization

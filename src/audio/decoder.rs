@@ -3,6 +3,16 @@ use rodio::{Decoder, Source};
 use anyhow::{Result, anyhow};
 use ogg::reading::PacketReader;
 use opus::Decoder as OpusDecoder;
+use lewton::inside_ogg::OggStreamReader;
+
+/// Normalization factor to convert 16-bit audio samples (-32768 to +32767) to float (-1.0 to +1.0)
+const I16_TO_F32_NORM_FACTOR: f32 = 32768.0;
+
+/// Opus buffer size of 60ms
+const OPUS_BUFFER_SIZE: usize = 2880;
+
+/// Pre-initialized VecDeque Buffer size
+const INITIAL_BUFFER_CAPACITY: usize = 4096;
 
 pub enum AudioDecoder {
     Rodio(Decoder<BufReader<File>>),
@@ -11,6 +21,10 @@ pub enum AudioDecoder {
         packet_reader: PacketReader<BufReader<File>>,
         sample_buffer: VecDeque<f32>,
     },
+    Vorbis {
+        decoder: Box<OggStreamReader<BufReader<File>>>,
+        sample_buffer: VecDeque<f32>,
+    }
 }
 
 impl Iterator for AudioDecoder {
@@ -19,7 +33,7 @@ impl Iterator for AudioDecoder {
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             AudioDecoder::Rodio(decoder) => {
-                decoder.next().map(|sample| sample as f32 / 32768.0)
+                decoder.next().map(|sample| sample as f32 / I16_TO_F32_NORM_FACTOR)
             }
             AudioDecoder::Opus { decoder, packet_reader, sample_buffer } => {
                 // Return buffer sample if available
@@ -31,7 +45,7 @@ impl Iterator for AudioDecoder {
                 while sample_buffer.is_empty() {
                     match packet_reader.read_packet() {
                         Ok(Some(packet)) => {
-                            let mut output_buffer = vec![0.0f32; 5760]; // Max frame size for 120ms
+                            let mut output_buffer = vec![0.0f32; OPUS_BUFFER_SIZE]; // Max frame size for 120ms
                             if let Ok(decoded_samples) = decoder.decode_float(&packet.data, &mut output_buffer, false) {
                                 sample_buffer.extend(output_buffer.into_iter().take(decoded_samples * 2));
                             } 
@@ -42,6 +56,26 @@ impl Iterator for AudioDecoder {
 
                 sample_buffer.pop_front()
             },
+            AudioDecoder::Vorbis { decoder, sample_buffer} => {
+                if let Some(sample) = sample_buffer.pop_front() {
+                    return Some(sample);
+                }
+
+                while sample_buffer.is_empty() {
+                    match decoder.read_dec_packet_itl() {
+                        Ok(Some(pck_samples)) => {
+                            for sample in pck_samples {
+                                sample_buffer.push_back(sample as f32 / I16_TO_F32_NORM_FACTOR);
+                            }
+                        }
+                        Ok(None) => return None, // End of stream
+                        Err(_) => return None,   // Error reading packet
+                    }
+                }
+                    
+
+                sample_buffer.pop_front()
+            }
         }
 
     }
@@ -52,6 +86,7 @@ impl Source for AudioDecoder {
         match self {
             AudioDecoder::Rodio(decoder) => decoder.current_frame_len(),
             AudioDecoder::Opus { .. } => Some(960), // 20ms frame size for Opus
+            AudioDecoder::Vorbis { .. } => None, // Variable frame size
         }
     }
 
@@ -59,6 +94,7 @@ impl Source for AudioDecoder {
         match self {
             AudioDecoder::Rodio(decoder) => decoder.channels(),
             AudioDecoder::Opus { .. } => 2, // Opus decoder is configured for stereo
+            AudioDecoder::Vorbis { decoder, .. } => decoder.ident_hdr.audio_channels as u16,
         }
     }
 
@@ -66,6 +102,7 @@ impl Source for AudioDecoder {
         match self {
             AudioDecoder::Rodio(decoder) => decoder.sample_rate(),
             AudioDecoder::Opus { .. } => 48000, // Opus always uses 48kHz
+            AudioDecoder::Vorbis { decoder, .. } => decoder.ident_hdr.audio_sample_rate,
         }
     }
 
@@ -79,15 +116,26 @@ impl Source for AudioDecoder {
 
 pub fn load_audio_file(path: &Path) -> Result<AudioDecoder> {
 
+    let file = BufReader::new(File::open(path)?);
+    
     let extension = path.extension()
         .and_then(|ext| ext.to_str())
         .map(|s| s.to_lowercase());
 
     match extension.as_deref() {
         Some("opus") => load_opus_file(path),
+        Some("ogg") => {
+            // For Vorbis files, we'll use rodio's native decoder
+            match OggStreamReader::new(file) {
+                Ok(decoder) => Ok(AudioDecoder::Vorbis{
+                    decoder: Box::new(decoder),
+                    sample_buffer: VecDeque::with_capacity(INITIAL_BUFFER_CAPACITY),
+                }),
+                Err(_) => Err(anyhow!("Failed to decode Vorbis file"))
+            }
+        }
         _ => {
             // Try regular rodio decoder for other formats
-            let file = BufReader::new(File::open(path)?);
             match Decoder::new(file) {
                 Ok(decoder) => Ok(AudioDecoder::Rodio(decoder)),
                 Err(_) => Err(anyhow!("Unsupported audio format"))
@@ -113,6 +161,6 @@ fn load_opus_file(path: &Path) -> Result<AudioDecoder> {
     Ok(AudioDecoder::Opus {
         decoder: opus_decoder,
         packet_reader,
-        sample_buffer: VecDeque::new(),
+        sample_buffer: VecDeque::with_capacity(INITIAL_BUFFER_CAPACITY),
     })
 }

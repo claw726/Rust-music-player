@@ -8,6 +8,9 @@ use crossterm::{
 use rust_music_player::audio::player::AudioPlayer;
 use rust_music_player::utils::metadata::print_song_info;
 
+// Poll keyboard at 60x / s
+const POLL_INTERVAL: Duration = Duration::from_millis(60);
+
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
@@ -23,7 +26,7 @@ fn main() -> Result<()> {
     let should_stop = Arc::new(AtomicBool::new(false));
     let should_stop_clone = should_stop.clone();
 
-    enable_raw_mode()?;
+    
     
     // Clear the screen and print controls
     let controls = [
@@ -42,6 +45,8 @@ fn main() -> Result<()> {
 
     player.play(path)?;
 
+    enable_raw_mode()?;
+
     let mut not_playing_count = 0;
     const MAX_NOT_PLAYING_CHECKS: u32 = 3;
 
@@ -49,7 +54,7 @@ fn main() -> Result<()> {
     let seek_cooldown = Duration::from_millis(100);
 
     while player.is_playing() {
-        if event::poll(Duration::from_millis(10))? {
+        if event::poll(POLL_INTERVAL)? {
             if let Event::Key(key_event) = event::read()? {
                 if key_event.kind == KeyEventKind::Press {
                     match key_event.code {
@@ -90,8 +95,6 @@ fn main() -> Result<()> {
         } else {
             not_playing_count = 0;
         }
-
-        std::thread::sleep(Duration::from_millis(10));
     }
 
     player.stop();

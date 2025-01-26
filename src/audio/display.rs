@@ -8,6 +8,9 @@ use terminal_size::{terminal_size, Width, Height};
 
 use crate::audio::{TimeFormat, TimeUtils};
 
+// Display rate of 60fps
+const POLL_INTERVAL: Duration = Duration::from_millis(16);
+
 pub struct DisplayThread {
     handle: Option<JoinHandle<()>>,
     should_stop: Arc<AtomicBool>,
@@ -31,12 +34,11 @@ impl DisplayThread {
         stdout().flush().unwrap();
 
         let handle = Some(thread::spawn(move || {
-            let frame_time = Duration::from_millis(16); // ~60 FPS
             let mut last_update = Instant::now();
 
             while !should_stop_clone.load(Ordering::SeqCst) {
                 let now = Instant::now();
-                if now.duration_since(last_update) >= frame_time {
+                if now.duration_since(last_update) >= POLL_INTERVAL {
                     if is_playing.load(Ordering::SeqCst) {
                         if let Some(start_time) = *playback_start.lock().unwrap() {
                             let pause_duration = *total_pause_duration.lock().unwrap();

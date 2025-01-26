@@ -141,13 +141,13 @@ impl AudioPlayer {
 
     pub fn seek(&mut self, offset_seconds: i64) -> Result<(), String> {
         // Get current position with mutex lock
-        let current_pos = *self.current_position.lock().unwrap();
-        
-        // Calculate new position with saturation arithmetic
-        let new_pos = if offset_seconds.is_negative() {
-            current_pos.saturating_sub(offset_seconds.unsigned_abs() * 1000)
-        } else {
-            current_pos.saturating_add(offset_seconds as u64 * 1000)
+        let new_pos = {
+            let current_pos = *self.current_position.lock().unwrap();
+            if offset_seconds.is_negative() {
+                current_pos.saturating_sub(offset_seconds.unsigned_abs() * 1000)
+            } else {
+                current_pos.saturating_add(offset_seconds as u64 * 1000)
+            }
         };
         
         // Try to play from new position

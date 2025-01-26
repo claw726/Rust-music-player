@@ -845,6 +845,7 @@ dependencies = [
  "anyhow",
  "crossterm",
  "device_query",
+ "lewton",
  "lofty",
  "ogg 0.9.2",
  "opus",
