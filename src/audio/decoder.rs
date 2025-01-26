@@ -20,27 +20,30 @@ impl Iterator for AudioDecoder {
         match self {
             AudioDecoder::Rodio(decoder) => {
                 decoder.next().map(|sample| sample as f32 / 32768.0)
-            },
+            }
             AudioDecoder::Opus { decoder, packet_reader, sample_buffer } => {
-                // If buffer is empty, decode next packet
-                if sample_buffer.is_empty() {
-                    if let Ok(Some(packet)) = packet_reader.read_packet() {
-                        // Get number of samples in this packet
-                        if let Ok(nb_samples) = decoder.get_nb_samples(&packet.data) {
-                            let mut output_buffer = vec![0.0f32; nb_samples * 2]; // * 2 for stereo
-                            if let Ok(decoded_samples) = decoder.decode_float(&packet.data, &mut output_buffer, false) {
-                                // Push all decoded samples to the buffer
-                                sample_buffer.extend(output_buffer.into_iter().take(decoded_samples * 2));
-                            }
-                        }
-                    }
+                // Return buffer sample if available
+                if let Some(sample) = sample_buffer.pop_front() {
+                    return Some(sample);
                 }
                 
-                // Return next sample from buffer
+                // Read and decode the next packet
+                while sample_buffer.is_empty() {
+                    match packet_reader.read_packet() {
+                        Ok(Some(packet)) => {
+                            let mut output_buffer = vec![0.0f32; 5760]; // Max frame size for 120ms
+                            if let Ok(decoded_samples) = decoder.decode_float(&packet.data, &mut output_buffer, false) {
+                                sample_buffer.extend(output_buffer.into_iter().take(decoded_samples * 2));
+                            } 
+                        }
+                        _ => return None, // End of stream error
+                    }
+                }
+
                 sample_buffer.pop_front()
             },
         }
-        
+
     }
 }
 
@@ -74,23 +77,23 @@ impl Source for AudioDecoder {
     }
 }
 
-pub fn load_sound_file(path: &Path) -> Result<AudioDecoder> {
+pub fn load_audio_file(path: &Path) -> Result<AudioDecoder> {
 
-    // For other formats, try Rodio first
-    if let Ok(decoder) = Decoder::new(BufReader::new(File::open(path)?)) {
-        return Ok(AudioDecoder::Rodio(decoder));
-    }
-
-    // Try Opus for .opus files
-    if path.extension()
+    let extension = path.extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| ext.eq_ignore_ascii_case("opus"))
-        .unwrap_or(false)
-    {
-        return load_opus_file(path);
-    }
+        .map(|s| s.to_lowercase());
 
-    Err(anyhow!("Unsupported audio format.\nProgram only supports MP3, Vorbis, Opus, WAV, and FLAC files."))
+    match extension.as_deref() {
+        Some("opus") => load_opus_file(path),
+        _ => {
+            // Try regular rodio decoder for other formats
+            let file = BufReader::new(File::open(path)?);
+            match Decoder::new(file) {
+                Ok(decoder) => Ok(AudioDecoder::Rodio(decoder)),
+                Err(_) => Err(anyhow!("Unsupported audio format"))
+            }
+        }
+    } 
 }
 
 fn load_opus_file(path: &Path) -> Result<AudioDecoder> {
@@ -99,11 +102,11 @@ fn load_opus_file(path: &Path) -> Result<AudioDecoder> {
     
     // Read and verify Opus header
     let _header_packet = packet_reader.read_packet()?
-        .ok_or_else(|| anyhow!("Failed to read Opus header"))?;
+        .ok_or_else(|| anyhow!("Missing Opus header"))?;
     
     // Read and verify Opus comments
     let _comments_packet = packet_reader.read_packet()?
-        .ok_or_else(|| anyhow!("Failed to read Opus comments"))?;
+        .ok_or_else(|| anyhow!("Missing Opus comments"))?;
 
     let opus_decoder = OpusDecoder::new(48000, opus::Channels::Stereo)?;
 

@@ -1,10 +1,10 @@
-use std::{env, fs::File, io::{stdout, BufReader, Write}, path::Path, sync::{atomic::{AtomicBool, Ordering}, Arc}, time::{Duration, Instant}};
+use std::{env, io::{stdout, Write}, path::Path, sync::{atomic::{AtomicBool, Ordering}, Arc}, time::{Duration, Instant}};
 use anyhow::Result;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     terminal::{enable_raw_mode, disable_raw_mode},
 };
-use rodio::Decoder;
+
 use rust_music_player::audio::player::AudioPlayer;
 use rust_music_player::utils::metadata::print_song_info;
 
@@ -17,8 +17,6 @@ fn main() -> Result<()> {
 
     let path = Path::new(&args[1]);
     let mut player = AudioPlayer::new()?;
-    let file = BufReader::new(File::open(path)?);
-    let decoder = Decoder::new(file)?;
     let song_duration = print_song_info(path).map_err(|e| anyhow::anyhow!("{}", e))?;
     player.set_metadata_duration(song_duration);
 
@@ -42,7 +40,7 @@ fn main() -> Result<()> {
     println!("===============\r");
     stdout().flush()?;
 
-    player.play(decoder, path);
+    player.play(path)?;
 
     let mut not_playing_count = 0;
     const MAX_NOT_PLAYING_CHECKS: u32 = 3;

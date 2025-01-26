@@ -1,15 +1,14 @@
-use rodio::{Decoder, OutputStream, Sink, Source};
+use rodio::{OutputStream, Sink, Source};
 use anyhow::Result;
 use std::{
-    fs::File,
-    io::BufReader,
     path::{Path, PathBuf},
     sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex},
     time::{Duration, Instant},
 };
 
-use super::display::DisplayThread;
+use super::{decoder::AudioDecoder, display::DisplayThread};
 use super::utils::{TimeFormat, TimeUtils};
+use super::decoder::load_audio_file;
 use std::io::{stdout, Write};
 
 pub struct AudioPlayer {
@@ -57,17 +56,19 @@ impl AudioPlayer {
         }
     }
 
-    pub fn play<P: AsRef<Path>>(&mut self, source: Decoder<BufReader<File>>, path: P) {
+    pub fn play<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         // Stop any existing display thread
         if let Some(mut display_thread) = self.display_thread.take() {
             display_thread.stop();
         }
 
+        let source = load_audio_file(path.as_ref())?;
         self.file_path = Some(path.as_ref().to_path_buf());
-        // Try to get duration from decoder first, fall back to metadata duration
-        self.total_duration = source.total_duration().or(self.metadata_duration);
 
-        let new_sink = Sink::try_new(&self.stream_handle).unwrap();
+        // Try to get duration from decoder
+        self.total_duration = self.metadata_duration;
+
+        let new_sink = Sink::try_new(&self.stream_handle)?;
         new_sink.append(source);
         self.sink = Arc::new(new_sink);
         
@@ -89,17 +90,15 @@ impl AudioPlayer {
             Arc::clone(&self.pause_start),
             Arc::clone(&self.total_pause_duration),
         ));
+
+        Ok(())
     }
 
-    fn create_decoder(&self) -> Result<Decoder<BufReader<File>>, String> {
+    fn create_decoder(&self) -> Result<AudioDecoder, String> {
         let path = self.file_path.as_ref()
             .ok_or_else(|| "No file path set".to_string())?;
 
-        let file = File::open(path)
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-
-        let reader = BufReader::new(file);
-        Decoder::new(reader)
+        load_audio_file(path)
             .map_err(|e| format!("Failed to create decoder: {}", e))
     }
 
@@ -113,7 +112,8 @@ impl AudioPlayer {
         }
 
         // Create decoder and skip to position
-        let decoder = self.create_decoder()?;
+        let decoder = self.create_decoder()
+            .map_err(|e| format!("Failed to create decoder: {}", e))?;
         let skip_duration = Duration::from_millis(position_ms);
         let skipped_source = decoder.skip_duration(skip_duration);
 
@@ -128,16 +128,11 @@ impl AudioPlayer {
         self.sink = Arc::new(new_sink);
         
         // Reset all timing-related state
-        *self.playback_start.lock().unwrap() = Some(Instant::now());
+        *self.playback_start.lock().unwrap() = Some(Instant::now() - Duration::from_millis(position_ms));
         *self.pause_start.lock().unwrap() = None;
         *self.total_pause_duration.lock().unwrap() = Duration::from_secs(0);
-        
-        // Adjust playback start time to account for the seek position
-        if let Ok(mut start_time) = self.playback_start.lock() {
-            *start_time = Some(Instant::now() - Duration::from_millis(position_ms));
-        }
-
         *self.current_position.lock().unwrap() = position_ms;
+
         self.is_playing.store(true, Ordering::SeqCst);
         self.is_paused.store(false, Ordering::SeqCst);
         
