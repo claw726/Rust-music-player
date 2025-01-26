@@ -1,6 +1,6 @@
 # Rust Audio Player
 
-A command-line audio player built in Rust that supports MP3 and FLAC formats.
+A command-line audio player built in Rust that supports MP3, FLAC, OPUS, and Vorbis formats.
 
 ## Features
 
