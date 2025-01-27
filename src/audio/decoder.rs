@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufReader, path::Path, time::Duration, collections::VecDeque};
+use std::{collections::VecDeque, fs::File, io::BufReader, path::Path, time::Duration};
 use rodio::{Decoder, Sample, Source};
 use anyhow::{Result, anyhow};
 use ogg::reading::PacketReader;
@@ -7,6 +7,7 @@ use lewton::inside_ogg::OggStreamReader;
 use ffmpeg_next as ffmpeg;
 use ffmpeg_next::{format, frame, codec};
 use std::sync::{Arc, Mutex};
+use alac;
 
 /// Normalization factor to convert 16-bit audio samples (-32768 to +32767) to float (-1.0 to +1.0)
 const I16_TO_F32_NORM_FACTOR: f32 = 32768.0;
@@ -40,6 +41,11 @@ pub enum AudioDecoder {
     Vorbis {
         decoder: Box<OggStreamReader<BufReader<File>>>,
         sample_buffer: VecDeque<f32>,
+    },
+    Alac {
+        packets: alac::Packets<BufReader<File>, i32>,
+        buffer: VecDeque<f32>,
+        config: alac::StreamInfo,
     },
     FFmpeg (Arc<ThreadSafeFFmpeg>),
 
@@ -94,6 +100,68 @@ impl Iterator for AudioDecoder {
 
                 sample_buffer.pop_front()
             },
+            AudioDecoder::Alac { packets, buffer, config } => {
+                if let Some(sample) = buffer.pop_front() {
+                    return Some(sample);
+                }
+            
+                let max_samples = config.max_samples_per_packet() as usize * config.channels() as usize;
+                let mut output = vec![0i32; max_samples];
+            
+                match packets.next_into(&mut output) {
+                    Ok(Some(decoded)) => {
+                        // If buffer is empty, analyze the first packet to determine actual bit depth
+                        if buffer.is_empty() {
+                            // Find the maximum absolute value in the first packet
+                            let max_abs = decoded.iter()
+                                .map(|&s| s.abs())
+                                .max()
+                                .unwrap_or(0);
+            
+                            // Determine bit depth based on the maximum value
+                            let (shift, norm_factor) = if max_abs > 0 {
+                                let bits_needed = 32 - max_abs.leading_zeros();
+                                
+                                match bits_needed {
+                                    0..=16 => (0, I16_TO_F32_NORM_FACTOR), // 16-bit
+                                    17..=24 => (8, 8388608.0), // 24-bit shifted left by 8
+                                    _ => (0, I32_TO_F32_NORM_FACTOR) // 32-bit
+                                }
+                            } else {
+                                (0, I32_TO_F32_NORM_FACTOR) // Default to 32-bit if no signal
+                            };
+            
+                            // Convert samples to f32 and add to buffer
+                            for &sample in decoded {
+                                let shifted = if shift > 0 { sample >> shift } else { sample };
+                                let normalized = (shifted as f32) / norm_factor;
+                                let clamped = normalized.clamp(-1.0, 1.0);
+                                buffer.push_back(clamped);
+                            }
+                        } else {
+                            // Use the same normalization for subsequent packets
+                            let (shift, norm_factor) = match config.bit_depth() {
+                                16 => (0, I16_TO_F32_NORM_FACTOR),
+                                24 => (8, 8388608.0), // 24-bit shifted left by 8
+                                _ => (0, I32_TO_F32_NORM_FACTOR)
+                            };
+            
+                            for &sample in decoded {
+                                let shifted = if shift > 0 { sample >> shift } else { sample };
+                                let normalized = (shifted as f32) / norm_factor;
+                                let clamped = normalized.clamp(-1.0, 1.0);
+                                buffer.push_back(clamped);
+                            }
+                        }
+                        buffer.pop_front()
+                    }
+                    Ok(None) => None, // End of stream
+                    Err(e) => {
+                        println!("Error decoding ALAC packet: {:?}", e);
+                        None
+                    }
+                }
+            }
             AudioDecoder::FFmpeg(ffmpeg) => {
                 let mut buffer = ffmpeg.sample_buffer.lock().unwrap();
                 if let Some(sample) = buffer.pop_front() {
@@ -210,6 +278,7 @@ impl Source for AudioDecoder {
             AudioDecoder::Rodio(decoder) => decoder.channels(),
             AudioDecoder::Opus { .. } => 2, // Opus decoder is configured for stereo
             AudioDecoder::Vorbis { decoder, .. } => decoder.ident_hdr.audio_channels as u16,
+            AudioDecoder::Alac { config, .. } => config.channels() as u16,
             AudioDecoder::FFmpeg(ffmpeg) => ffmpeg.decoder.lock().unwrap().channels(),
         }
     }
@@ -219,6 +288,7 @@ impl Source for AudioDecoder {
             AudioDecoder::Rodio(decoder) => decoder.sample_rate(),
             AudioDecoder::Opus { .. } => 48000, // Opus always uses 48kHz
             AudioDecoder::Vorbis { decoder, .. } => decoder.ident_hdr.audio_sample_rate,
+            AudioDecoder::Alac {  config, .. } => config.sample_rate(),
             AudioDecoder::FFmpeg (ffmpeg) => ffmpeg.decoder.lock().unwrap().rate(),
         }
     }
@@ -239,17 +309,28 @@ pub fn load_audio_file(path: &Path) -> Result<AudioDecoder> {
         .and_then(|ext| ext.to_str())
         .map(|s| s.to_lowercase());
 
+
     match extension.as_deref() {
         Some("m4a") => {
-            match load_opus_file(path) {
-                Ok(decoder) => Ok(decoder),
+            match load_alac_file(path) {
+                Ok(decoder) => {
+                    Ok(decoder)
+                },
                 Err(_) => {
-                    // If opus fails, try rodio
-                    let file = BufReader::new(File::open(path)?);
-                    match Decoder::new(file) {
-                        Ok(decoder) => Ok(AudioDecoder::Rodio(decoder)),
+                    match load_opus_file(path) {
+                        Ok(decoder) => {
+                            Ok(decoder)
+                        },
                         Err(_) => {
-                            load_ffmpeg_file(path)
+                            let file = BufReader::new(File::open(path)?);
+                            match Decoder::new(file) {
+                                Ok(decoder) => {
+                                    Ok(AudioDecoder::Rodio(decoder))
+                                },
+                                Err(_) => {
+                                    load_ffmpeg_file(path)
+                                }
+                            }
                         }
                     }
                 }
@@ -293,6 +374,25 @@ fn load_opus_file(path: &Path) -> Result<AudioDecoder> {
     })
 }
 
+
+fn load_alac_file(path: &Path) -> Result<AudioDecoder> {
+    
+    let file = BufReader::new(File::open(path)?);
+
+    let reader = alac::Reader::new(file)
+        .map_err(|e| anyhow!("Failed to create ALAC reader: {:?}", e))?;
+    
+    let stream_info = reader.stream_info().clone();
+    
+    // Convert reader into packets
+    let packets = reader.into_packets();
+    
+    Ok(AudioDecoder::Alac {
+        packets,  // Store packets instead of reader
+        buffer: VecDeque::with_capacity(INITIAL_BUFFER_CAPACITY),
+        config: stream_info,
+    })
+}
 
 fn load_ffmpeg_file(path: &Path) -> Result<AudioDecoder> {
     ffmpeg::init().map_err(|e| anyhow!("Failed to initialize FFmpeg: {}", e))?;

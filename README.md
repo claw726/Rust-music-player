@@ -14,7 +14,7 @@ A command-line audio player built in Rust that supports multiple audio formats t
 |----------|---------|------------|----------|
 | **Lossless** | 
 | | FLAC | `.flac` | [Rodio](https://github.com/RustAudio/rodio) |
-| | ALAC | `.m4a` | [FFmpeg](https://www.ffmpeg.org/) ([rust-bindings](https://github.com/zmwangx/rust-ffmpeg)) |
+| | ALAC | `.m4a` | [alac.rs](https://github.com/ebarnard/alac.rs) |
 | | WAV | `.wav` | [Rodio](https://github.com/RustAudio/rodio) |
 | **Lossy** |
 | | MP3 | `.mp3` | [Rodio](https://github.com/RustAudio/rodio) |
