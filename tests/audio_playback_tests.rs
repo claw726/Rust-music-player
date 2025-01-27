@@ -2,12 +2,15 @@ use rust_music_player::audio::AudioPlayer;
 use std::path::PathBuf;
 
 #[test]
+#[cfg_attr(not(feature = "local-audio-tests"), ignore)]
 fn test_audio_player_creation() {
     let player = AudioPlayer::new();
     assert!(player.is_ok());
 }
 
 #[test]
+#[cfg_attr(not(feature = "local-audio-tests"), ignore)]
+
 fn test_audio_player_lifecycle() {
     let mut player = AudioPlayer::new().unwrap();
 

@@ -3,6 +3,9 @@ name = "rust_music_player"
 version = "0.1.2"
 edition = "2021"
 
+[features]
+local-audio-tests = []
+
 [dependencies]
 rodio = { version = "0.20.*", features = ["symphonia-all"] }
 terminal_size = "0.4.1"
