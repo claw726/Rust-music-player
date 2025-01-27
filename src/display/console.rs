@@ -1,3 +1,6 @@
+//! Module for handling the display of audio playback progress in the terminal.
+//! It manages a separate thread that updates the progress bar and playback status.
+
 use std::{
     io::{stdout, Write},
     sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex},
@@ -11,12 +14,14 @@ use crate::audio::{TimeFormat, TimeUtils};
 // Display rate of 60fps
 const POLL_INTERVAL: Duration = Duration::from_millis(16);
 
+// Manages the display thread for audio playback progress
 pub struct DisplayThread {
     handle: Option<JoinHandle<()>>,
     should_stop: Arc<AtomicBool>,
 }
 
 impl DisplayThread {
+    /// Creates a new 'DisplayThread' with the given playback state
     pub fn new(
         is_playing: Arc<AtomicBool>,
         is_paused: Arc<AtomicBool>,
@@ -104,6 +109,7 @@ impl DisplayThread {
         }
     }
 
+    /// Stops the display thread
     pub fn stop(&mut self) {
         self.should_stop.store(true, Ordering::SeqCst);
         if let Some(thread) = self.handle.take() {
@@ -111,9 +117,14 @@ impl DisplayThread {
         }
     }
 
+    /// Formats the progress bar based on the current position and total duration
     pub fn format_progress_bar(position: u64, total: u64, width: usize) -> String {
         if total == 0 { return String::new(); }
-        let progress = (position as f64 / total as f64 * width as f64) as usize;
+
+        // Calculate progress, ensuring proper rounding
+        let progress = ((position as f64) / total as f64 * width as f64).round() as usize;
+        let progress = progress.min(width); // Ensure we don't exceed width
+
         // Pre-allocate the string capacity
         let mut bar = String::with_capacity(width + 2);
         bar.push('[');
@@ -123,6 +134,7 @@ impl DisplayThread {
         bar
     }
 
+    /// Calculates the width of the progress bar based on the terminal size
     fn get_terminal_width() -> usize {
         if let Some((Width(w), Height(_))) = terminal_size() {
             w as usize
@@ -131,6 +143,7 @@ impl DisplayThread {
         }
     }
 
+    /// Calcualtes the width of the progress bar, reserving space for other UI elements
     pub fn calculate_progress_bar_width() -> usize {
         let term_width = Self::get_terminal_width();
         // Reserve space for "00:00 / 00:00 [] (Playing)    "
@@ -145,7 +158,67 @@ impl DisplayThread {
 }
 
 impl Drop for DisplayThread {
+    /// Ensures the display thread is stopped when the 'DisplayThread' is dropped
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn test_progress_bar_formatting() {
+        let cases = vec![
+            (0, 100, 10, "[----------]"),
+            (50, 100, 10, "[=====-----]"),
+            (100, 100, 10, "[==========]"),
+        ];
+
+        for (pos, total, width, expected) in cases {
+            let result = DisplayThread::format_progress_bar(pos, total, width);
+            assert_eq!(result, expected, 
+                "Failed for pos={}, total={}, width={}", 
+                pos, total, width);
+        }
+    }
+
+    #[test]
+    fn test_progress_bar_width_calculation() {
+        // This test might need to be adjusted based on your terminal size
+        let width = DisplayThread::calculate_progress_bar_width();
+        assert!(width >= 20); // Minimum width
+    }
+
+    #[test]
+    fn test_display_thread_lifecycle() {
+        let is_playing = Arc::new(AtomicBool::new(true));
+        let is_paused = Arc::new(AtomicBool::new(false));
+        let current_position = Arc::new(Mutex::new(0));
+        let total_duration = Some(Duration::from_secs(10));
+        let playback_start = Arc::new(Mutex::new(Some(Instant::now())));
+        let pause_start = Arc::new(Mutex::new(None));
+        let total_pause_duration = Arc::new(Mutex::new(Duration::from_secs(0)));
+
+        let mut display = DisplayThread::new(
+            Arc::clone(&is_playing),
+            Arc::clone(&is_paused),
+            Arc::clone(&current_position),
+            total_duration,
+            Arc::clone(&playback_start),
+            Arc::clone(&pause_start),
+            Arc::clone(&total_pause_duration),
+        );
+
+        // Let it run for a brief moment
+        std::thread::sleep(Duration::from_millis(100));
+        
+        // Test stopping
+        display.stop();
+        assert!(display.handle.is_none());
     }
 }

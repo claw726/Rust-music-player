@@ -387,3 +387,47 @@ impl AudioDecoder {
         SkipDuration::new(self, duration)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_load_audio_file() {
+        let test_files = vec![
+            ("test.mp3", true),
+            ("test.opus", true),
+            ("test.ogg", true),
+            ("test.aac", true),
+            ("test.flac", true),
+            ("test.m4a", true),
+            ("test.wav", true),
+            ("invalid.xyz", false),
+        ];
+
+        for (file, should_succeed) in test_files {
+            let path = PathBuf::from(format!("tests/resources/{}", file));
+            let result = load_audio_file(&path);
+            
+            if should_succeed {
+                assert!(result.is_ok(), "Failed to load valid audio file: {}", file);
+            } else {
+                assert!(result.is_err(), "Should fail for invalid file: {}", file);
+            }
+        }
+    }
+
+    #[test]
+    fn test_skip_duration() {
+        let test_file = PathBuf::from("tests/resources/test.mp3");
+        let decoder = load_audio_file(&test_file).unwrap();
+        
+        let skip_duration = Duration::from_secs(1);
+        let skipped_source = decoder.skip_duration(skip_duration);
+        
+        // Verify sample rate and channels remain unchanged
+        assert_eq!(skipped_source.sample_rate(), 44100); // Adjust based on your test file
+        assert_eq!(skipped_source.channels(), 2);        // Adjust based on your test file
+    }
+}

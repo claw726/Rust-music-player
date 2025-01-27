@@ -1,3 +1,6 @@
+//! Module for managing audio playback, including play, pause, seek, and stop functionality
+
+
 use rodio::{OutputStream, Sink};
 use anyhow::Result;
 use std::{
@@ -6,11 +9,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::{decoder::AudioDecoder, display::DisplayThread};
+use super::decoder::AudioDecoder;
+use crate::display::console::DisplayThread;
 use super::utils::{TimeFormat, TimeUtils};
 use super::decoder::load_audio_file;
 use std::io::{stdout, Write};
 
+/// Manages audio playback, including state and display
 pub struct AudioPlayer {
     _stream: OutputStream,
     stream_handle: rodio::OutputStreamHandle,
@@ -28,6 +33,7 @@ pub struct AudioPlayer {
 }
 
 impl AudioPlayer {
+    /// Creates a new 'AudioPlayer' instance
     pub fn new() -> Result<Self> {
         let (_stream, stream_handle) = OutputStream::try_default()?;
         let sink = Sink::try_new(&stream_handle)?;
@@ -48,6 +54,7 @@ impl AudioPlayer {
         })
     }
 
+    /// Sets the metadata duration of the audiofile
     pub fn set_metadata_duration(&mut self, duration_seconds: u64) {
         self.metadata_duration = Some(Duration::from_secs(duration_seconds));
         // Also set total_duration if it's not available from the decoder
@@ -158,10 +165,10 @@ impl AudioPlayer {
             let total_ms = total_duration.as_millis() as u64;
             
             // Get progress bar from display module
-            let progress_bar = super::display::DisplayThread::format_progress_bar(
+            let progress_bar = DisplayThread::format_progress_bar(
                 new_pos,
                 total_ms,
-                super::display::DisplayThread::calculate_progress_bar_width()
+                DisplayThread::calculate_progress_bar_width()
             );
             
             // Format times using TimeUtils
@@ -222,6 +229,10 @@ impl AudioPlayer {
         }
         
         playing
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.is_paused.load(Ordering::SeqCst)
     }
 }
 

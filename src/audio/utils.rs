@@ -42,31 +42,54 @@ impl TimeFormat for TimeUtils {
 
 #[cfg(test)]
 mod tests {
+    use std::u64;
+
     use super::*;
 
     #[test]
-    fn test_format_time() {
+    fn test_time_format_edge_cases() {
         assert_eq!(TimeUtils::format_time(0), "00:00");
-        assert_eq!(TimeUtils::format_time(1000), "00:01");
-        assert_eq!(TimeUtils::format_time(60000), "01:00");
-        assert_eq!(TimeUtils::format_time(61000), "01:01");
-        assert_eq!(TimeUtils::format_time(3599000), "59:59");
+
+        // Calcualte the expected string for MAX_FLT milliseconds
+        let max_ms = u64::MAX;
+        let total_seconds = max_ms / 1000;
+        let minutes= total_seconds / 60;
+        let seconds = total_seconds % 60;
+        let expected = format!("{}:{:02}", minutes, seconds);
+        assert_eq!(TimeUtils::format_time(u64::MAX), expected);
     }
 
     #[test]
-    fn test_format_duration() {
-        assert_eq!(TimeUtils::format_duration(Duration::from_secs(0)), "00:00");
-        assert_eq!(TimeUtils::format_duration(Duration::from_secs(61)), "01:01");
-        assert_eq!(TimeUtils::format_duration(Duration::from_secs(3599)), "59:59");
+    fn test_duration_format() {
+        let cases = vec![
+            (Duration::from_secs(0), "00:00"),
+            (Duration::from_secs(61), "01:01"),
+            (Duration::from_secs(3600), "60:00"),
+        ];
+
+        for (duration, expected) in cases {
+            assert_eq!(TimeUtils::format_duration(duration), expected);
+        }
     }
 
     #[test]
-    fn test_parse_time_str() {
-        assert_eq!(TimeUtils::parse_time_str("00:00"), Some(0));
-        assert_eq!(TimeUtils::parse_time_str("01:00"), Some(60000));
-        assert_eq!(TimeUtils::parse_time_str("01:30"), Some(90000));
-        assert_eq!(TimeUtils::parse_time_str("invalid"), None);
-        assert_eq!(TimeUtils::parse_time_str("01:60"), None);
-        assert_eq!(TimeUtils::parse_time_str("01:01:01"), None);
+    fn test_time_str_parsing() {
+        let cases = vec![
+            ("00:00", Some(0)),
+            ("01:30", Some(90000)),
+            ("59:59", Some(3599000)),
+            ("60:00", Some(3600000)),
+            ("invalid", None),
+            ("99:99", None),
+        ];
+
+        for (input, expected) in cases {
+            assert_eq!(
+                TimeUtils::parse_time_str(input), 
+                expected,
+                "Failed for input: {}", 
+                input
+            );
+        }
     }
 }

@@ -1,5 +1,4 @@
 mod utils;
-mod display;
 mod decoder;
 pub mod player;
 
