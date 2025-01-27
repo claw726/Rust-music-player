@@ -1,5 +1,0 @@
-   Compiling rust_music_player v0.1.1 (/home/calaw/rust_music_player)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.88s
-     Running `target/debug/rust_music_player '/run/media/calaw/3496C6C096C681BA/Users/Charles/Music/Ironclad Games/Sins of a Solar Empire soundtrack/01 Opening Theme.wma'`
-Error: No format could be determined from the provided file
-carg
