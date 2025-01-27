@@ -15,7 +15,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     
-    # Updated dependencies list
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -31,7 +30,15 @@ jobs:
           libxfixes-dev \
           libpango1.0-dev \
           libgl1-mesa-dev \
-          libglu1-mesa-dev
+          libglu1-mesa-dev \
+          libavcodec-dev \
+          libavformat-dev \
+          libavutil-dev \
+          libavfilter-dev \
+          libavdevice-dev \
+          ffmpeg \
+          clang \
+          libclang-dev
     
     - name: Build
       run: cargo build --verbose
