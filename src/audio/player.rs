@@ -1,4 +1,4 @@
-use rodio::{OutputStream, Sink, Source};
+use rodio::{OutputStream, Sink};
 use anyhow::Result;
 use std::{
     path::{Path, PathBuf},

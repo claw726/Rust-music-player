@@ -1,19 +1,5 @@
-   Compiling rust_music_player v0.1.0 (/home/calaw/rust_music_player)
-warning: unused import: `rodio::Decoder`
- --> src/main.rs:7:5
-  |
-7 | use rodio::Decoder;
-  |     ^^^^^^^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` on by default
-
-warning: unused variable: `file`
-  --> src/main.rs:20:9
-   |
-20 |     let file = BufReader::new(File::open(path)?);
-   |         ^^^^ help: if this is intentional, prefix it with an underscore: `_file`
-   |
-   = note: `#[warn(unused_variables)]` on by default
-
-warning: `rust_music_player` (bin "rust_music_player") generated 2 warnings (run `cargo fix --bin "rust_music_player"` to apply 1 suggestion)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.20s
+   Compiling rust_music_player v0.1.1 (/home/calaw/rust_music_player)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.88s
+     Running `target/debug/rust_music_player '/run/media/calaw/3496C6C096C681BA/Users/Charles/Music/Ironclad Games/Sins of a Solar Empire soundtrack/01 Opening Theme.wma'`
+Error: No format could be determined from the provided file
+carg
