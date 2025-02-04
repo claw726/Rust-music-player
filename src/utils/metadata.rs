@@ -1,3 +1,4 @@
+
 use std::path::Path;
 use lofty::{
     prelude::*,
@@ -5,6 +6,7 @@ use lofty::{
     tag::Tag,
     file::FileType,
 };
+use anyhow::Context;
 use crate::models::song_metadata::SongMetadata;
 use crate::utils::format::{format_to_string, format_bitrate, format_duration};
 
@@ -15,8 +17,11 @@ fn get_default_tag(file_type: FileType) -> Tag {
     Tag::new(tag_type)
 }
 
-pub fn read_metadata(path: &Path) -> Result<SongMetadata, Box<dyn std::error::Error>> {
-    let tagged_file = Probe::open(path)?.read()?;
+pub fn read_metadata(path: &Path) -> anyhow::Result<SongMetadata> {
+    let tagged_file = Probe::open(path)
+        .with_context(|| format!("\rFailed to open file: {}", path.display()))?
+        .read()
+        .with_context(|| format!("\rFailed to read metadata: {}", path.display()))?;
 
     let file_type = tagged_file.file_type();
     let default_tag = get_default_tag(file_type);
@@ -44,31 +49,31 @@ pub fn read_metadata(path: &Path) -> Result<SongMetadata, Box<dyn std::error::Er
     Ok(metadata)
 }
 
-pub fn print_song_info(path: &Path) -> Result<u64, Box<dyn std::error::Error>> {
+pub fn print_song_info(path: &Path) -> anyhow::Result<u64> {
     let metadata = read_metadata(path)?;
     let mut return_duration: u64 = 0;
 
     println!("\n=== Song Information ===");
-    println!("Title: {}", metadata.title.as_deref().unwrap_or("Unknown"));
-    println!("Artist: {}", metadata.artist.as_deref().unwrap_or("Unknown"));
-    println!("Album: {}", metadata.album.as_deref().unwrap_or("Unknown"));
-    println!("Format: {}", metadata.format);
+    println!("\rTitle: {}", metadata.title.as_deref().unwrap_or("Unknown"));
+    println!("\rArtist: {}", metadata.artist.as_deref().unwrap_or("Unknown"));
+    println!("\rAlbum: {}", metadata.album.as_deref().unwrap_or("Unknown"));
+    println!("\rFormat: {}", metadata.format);
 
     if let Some(bit_rate) = metadata.bit_rate {
-        println!("Bit Rate: {}", format_bitrate(bit_rate));
+        println!("\rBit Rate: {}", format_bitrate(bit_rate));
     }
 
     if let Some(duration) = metadata.duration {
-        println!("Duration: {}", format_duration(duration));
+        println!("\rDuration: {}", format_duration(duration));
         return_duration = duration.as_secs();
     }
 
     if let Some(year) = metadata.year {
-        println!("Year: {}", year);
+        println!("\rYear: {}", year);
     }
 
     if let Some(track) = metadata.track_number {
-        println!("Track Number: {}", track);
+        println!("\rTrack Number: {}", track);
     }
 
     Ok(return_duration)

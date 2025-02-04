@@ -9,6 +9,7 @@ A command-line audio player built in Rust that supports multiple audio formats t
 - Seeking functionality
 - Time display
 - Pause/Resume playback
+- Vim-style key-bindings
 
 | Category | Format | Extensions | Decoder |
 |----------|---------|------------|----------|
@@ -27,6 +28,14 @@ A command-line audio player built in Rust that supports multiple audio formats t
 | | M4A | `.m4a` | Multiple¹ |
 
 ¹ M4A files are automatically detected and decoded using the appropriate decoder (Opus, AAC, or ALAC)
+
+## Playlist Features
+
+When launching the program with a directory instead of a single file:
+- Automatically creates a playlist of all supported audio files in the directory
+- Files are sorted alphabetically for predictable ordering
+- Supports navigation between tracks in the folder
+- Retains playlist position when skipping tracks
 
 ## Dependencies
 
@@ -98,17 +107,38 @@ cargo install --path .
 From Release
 Download the latest release for your platform from the releases page.
 
-Usage
-
+## Usage
+#### Individual Files
 ```bash
 audioplayer <file>
 ```
-Controls
-Space: Play/Pause
-Left/Right: Seek backward/forward
-Enter: Quit
 
-I'll create a more comprehensive build section for the README that includes optimization flags and different build profiles. Here's the improved version:
+#### Play an entire directory
+```bash
+audioplayer <directory>
+```
+
+## Playback Controls
+
+| Key     | Action                                  | Mnemonic               |
+|---------|-----------------------------------------|------------------------|
+| `SPACE` | Play/Pause current track               | Standard media control|
+| `q`     | Stop playback and exit program         | "Quit"                 |
+| `k`/`←` | Seek backward 10 seconds               | Vim left / Arrow left  |
+| `j`/`→` | Seek forward 10 seconds                | Vim right / Arrow right|
+| `l`/`n` | Next track in playlist                  | Vim down/"Next"       |
+| `h`/`p` | Previous track in playlist             | Vim up/"Previous"      |
+| `?`     | Show help screen                       | Vim help               |
+
+### Playlist Navigation
+* In directory mode:
+  * Automatically advances to the next track when current song ends
+  * Wraps around to the first track when reaching end of playlist
+  * Maintains playlist operation when using seek operations
+  * Previous track operation wraps to the end when at the first track
+
+### Seek Behavior
+
 ## Building
 
 ### Development Build
